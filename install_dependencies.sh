@@ -3,6 +3,7 @@
 # --- Dependency Installation Script ---
 # This script detects the system's package manager and installs zsh, git, and ranger.
 # It also clones the Powerlevel10k theme.
+export EDITOR="code --wait"
 
 echo "Starting dependency installation..."
 
@@ -101,3 +102,6 @@ echo "   - For rc.conf (adjust path if this is for a specific application):"
 echo "     cp /mnt/c/Users/User/Desktop/Code/rc.conf ~/.config/rc.conf"
 echo ""
 echo "Installation script finished. Please follow the 'Next Steps' to complete your setup."
+
+
+sudo apt update && sudo apt install fzf
