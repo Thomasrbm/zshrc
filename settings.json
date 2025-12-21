@@ -1,0 +1,14 @@
+{
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "workbench.colorTheme": "GitHub Dark Dimmed",
+    "files.autoSave": "afterDelay",
+    "editor.insertSpaces": false,
+    "[cpp]": {
+        "editor.defaultFormatter": "keyhr.42-c-format"
+    },
+    "terminal.integrated.fontFamily": "MesloLGS NF",
+    "editor.fontFamily": "Fira Code",
+    "terminal.integrated.customGlyphs": true,
+    "terminal.integrated.gpuAcceleration": "off",
+    "editor.fontLigatures": false
+}
