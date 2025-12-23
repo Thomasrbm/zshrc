@@ -1,141 +1,84 @@
 #!/bin/bash
 
-# --- Dependency Installation Script ---
-export EDITOR="code --wait"
-# Répertoire où se trouve le script et tes fichiers de config
+# --- SCRIPT DE RÉPARATION TOTALE (AVEC NVM) ---
 BASE_DIR=$(dirname "$(readlink -f "$0")")
+export NVM_DIR="$HOME/.nvm"
 
-echo "Starting dependency installation from: $BASE_DIR"
+echo "🛑 1. NETTOYAGE TOTAL..."
+# On supprime tout ce qui pourrait créer des conflits
+rm -rf "$HOME/.zshrc" "$HOME/.p10k.zsh" "$HOME/.oh-my-zsh" "$HOME/.nvm"
+# On nettoie les paquets node système qui font conflit
+sudo apt-get remove --purge -y nodejs npm node-agent-base 2>/dev/null
+sudo apt-get autoremove -y
 
-# Step 1: Detect package manager
-PACKAGE_MANAGER=""
-if command -v apt &> /dev/null; then
-    PACKAGE_MANAGER="apt"
-elif command -v dnf &> /dev/null; then
-    PACKAGE_MANAGER="dnf"
-elif command -v pacman &> /dev/null; then
-    PACKAGE_MANAGER="pacman"
-else
-    echo "Error: Could not detect a supported package manager."
-    exit 1
-fi
+echo "📦 2. INSTALLATION DES OUTILS SYSTÈME..."
+sudo apt update
+sudo apt install -y zsh git curl unzip fonts-firacode tree ranger eza fzf ripgrep btop build-essential
 
-# Step 2: Function to install a package
-install_package() {
-    local PACKAGE_NAME=$1
-    if ! command -v "$PACKAGE_NAME" &> /dev/null; then
-        case "$PACKAGE_MANAGER" in
-            "apt") sudo apt update && sudo apt install -y "$PACKAGE_NAME" ;;
-            "dnf") sudo dnf install -y "$PACKAGE_NAME" ;;
-            "pacman") sudo pacman -Syu --noconfirm "$PACKAGE_NAME" ;;
-        esac
-    fi
-}
+echo "🔡 3. INSTALLATION FIRA CODE NERD FONT..."
+mkdir -p ~/.local/share/fonts
+curl -L -o ~/.local/share/fonts/FiraCodeNerdFont-Retina.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/FiraCode/Retina/FiraCodeNerdFont-Retina.ttf
+fc-cache -fv
 
+echo "⚡ 4. INSTALLATION DE NVM & NODE 20 (CRUCIAL POUR TON ZSHRC)..."
+# Installation de NVM
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
+# Chargement immédiat de NVM pour l'utiliser dans ce script
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
+# Installation de Node 20 (Demandé par ta fonction gemini)
+echo "Installing Node 20..."
+nvm install 20
+nvm use 20
+nvm alias default 20
 
-# --- Configuration de la police du Terminal (GNOME Terminal) ---
-echo "Configuring terminal font to Fira Code..."
+# Installation de Gemini CLI sur cette version de Node
+echo "Installing Gemini CLI..."
+npm install -g @google/generative-ai-cli
 
-# On récupère l'ID du profil par défaut du terminal
-PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
+echo "🐚 5. INSTALLATION OH MY ZSH & PLUGINS..."
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 
-# On active l'utilisation d'une police personnalisée
-gsettings set org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE/use-custom-font true
+echo "📝 6. COPIE DE TES FICHIERS (On ne modifie rien, on copie juste)..."
 
-# On définit la police sur Fira Code Retina (taille 12)
-gsettings set org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE/font "'Fira Code Retina 12'"
+# ZSHRC & P10K
+[ -f "$BASE_DIR/zshrc" ] && cp -fv "$BASE_DIR/zshrc" "$HOME/.zshrc"
+[ -f "$BASE_DIR/p10k.zsh" ] && cp -fv "$BASE_DIR/p10k.zsh" "$HOME/.p10k.zsh"
 
-echo "Terminal font updated!"
-
-
-
-
-
-
-
-# Step 3: Install core dependencies
-install_package zsh
-install_package git
-install_package ranger
-install_package fzf
-install_package ripgrep
-install_package btop
-install_package ncdu 
-install_package tldr
-install_package i3
-
-
-# --- Install Node.js and NPM ---
-echo "Checking for Node.js and NPM..."
-if ! command -v npm &> /dev/null; then
-    echo "Installing Node.js and NPM..."
-    # Installation de la version LTS (Long Term Support)
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-else
-    echo "Node.js/NPM already installed."
-fi
-
-# --- Install Gemini CLI ---
-if command -v npm &> /dev/null; then
-    if ! command -v gemini-chat &> /dev/null; then
-        echo "Installing Gemini CLI..."
-        sudo npm install -g @google/generative-ai-cli
-    fi
-fi
-
-# --- Install lazygit ---
-if ! command -v lazygit &> /dev/null; then
-    LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*"')
-    curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
-    sudo tar xf lazygit.tar.gz -C /usr/local/bin lazygit
-    rm lazygit.tar.gz
-fi
-
-# Step 4: Install Powerlevel10k theme
-P10K_CUSTOM_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-P10K_THEME_PATH="$P10K_CUSTOM_DIR/themes/powerlevel10k"
-
-if [ ! -d "$P10K_THEME_PATH" ]; then
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_THEME_PATH" 2>/dev/null || \
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$HOME/.config/powerlevel10k"
-fi
-
-# --- STEP 5: SYNC CONFIG FILES & VSCODE ---
-
-echo "Applying configuration files..."
-
-# 5.1 Zsh Config
-[ -f "$BASE_DIR/zshrc" ] && cp "$BASE_DIR/zshrc" "$HOME/.zshrc"
-[ -f "$BASE_DIR/p10k.zsh" ] && cp "$BASE_DIR/p10k.zsh" "$HOME/.p10k.zsh"
-
-# 5.2 Ranger Config
+# RANGER
 mkdir -p "$HOME/.config/ranger"
-[ -f "$BASE_DIR/rifle.conf" ] && cp "$BASE_DIR/rifle.conf" "$HOME/.config/ranger/rifle.conf"
-[ -f "$BASE_DIR/rc.conf" ] && cp "$BASE_DIR/rc.conf" "$HOME/.config/ranger/rc.conf"
+[ -f "$BASE_DIR/rc.conf" ] && cp -fv "$BASE_DIR/rc.conf" "$HOME/.config/ranger/rc.conf"
+[ -f "$BASE_DIR/rifle.conf" ] && cp -fv "$BASE_DIR/rifle.conf" "$HOME/.config/ranger/rifle.conf"
 
-# 5.3 VS Code Extensions
-if command -v code &> /dev/null; then
-    if [ -f "$BASE_DIR/extensions_vscode.zip" ]; then
-        echo "Extracting VS Code extensions..."
-        mkdir -p "$HOME/.vscode/extensions"
-        # On extrait directement dans le dossier des extensions
-        unzip -o "$BASE_DIR/extensions_vscode.zip" -d "$HOME/.vscode/extensions/"
-    fi
+# VS CODE (Settings + Extensions)
+VSC_DIR="$HOME/.config/Code/User"
+[ -d "$HOME/.var/app/org.visualstudio.code/config/Code/User" ] && VSC_DIR="$HOME/.var/app/org.visualstudio.code/config/Code/User"
+mkdir -p "$VSC_DIR"
+[ -f "$BASE_DIR/settings.json" ] && cp -fv "$BASE_DIR/settings.json" "$VSC_DIR/settings.json"
 
-    # 5.4 VS Code Settings (En dernier comme demandé)
-    echo "Applying VS Code settings.json..."
-    # Chemin standard pour VS Code sur Linux (Flatpak ou .deb)
-    VSCODE_CONFIG_DIR="$HOME/.config/Code/User"
-    [ -d "$HOME/.var/app/org.visualstudio.code/config/Code/User" ] && VSCODE_CONFIG_DIR="$HOME/.var/app/org.visualstudio.code/config/Code/User"
-    
-    mkdir -p "$VSCODE_CONFIG_DIR"
-    [ -f "$BASE_DIR/settings.json" ] && cp "$BASE_DIR/settings.json" "$VSCODE_CONFIG_DIR/settings.json"
-else
-    echo "Warning: VS Code not found. Skipping extensions and settings."
+if [ -f "$BASE_DIR/extensions_vscode.zip" ]; then
+    echo "📦 Extraction des extensions VS Code..."
+    mkdir -p "$HOME/.vscode/extensions"
+    unzip -o "$BASE_DIR/extensions_vscode.zip" -d "$HOME/.vscode/extensions"
 fi
 
-echo "Installation and Config Sync complete!"
-echo "Please run: chsh -s $(which zsh) and restart your terminal."
+echo "💻 7. CONFIG TERMINAL GNOME..."
+PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
+if [ -n "$PROFILE" ]; then
+    SCHEMA="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE/"
+    gsettings set "$SCHEMA" use-custom-font true
+    gsettings set "$SCHEMA" font 'FiraCode Nerd Font Retina 12'
+fi
+
+echo "---"
+echo "✅ TERMINÉ."
+echo "👉 NVM et Node 20 sont installés : Ta fonction Gemini marchera."
+echo "👉 Nerd Font installée : Ton thème P10K marchera."
+echo "👉 VS Code restauré."
+
+# On lance Zsh
+exec zsh

@@ -35,7 +35,6 @@ alias rel="source ~/.zshrc && echo Zsh config reloaded"
 alias zsh="code ~/.zshrc"
 alias py="python3"
 alias serve="python3 -m http.server" # Simple HTTP server
-alias open="explorer.exe ." # Useful for WSL
 alias anti="antigravity ." # Preserve existing custom alias
 
 # Custom Functions Aliases
