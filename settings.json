@@ -6,8 +6,7 @@
     "[cpp]": {
         "editor.defaultFormatter": "keyhr.42-c-format"
     },
-    "editor.fontFamily": "'FiraCode Nerd Font', monospace",
-    "terminal.integrated.fontFamily": "'FiraCode Nerd Font', monospace",
+    "editor.fontFamily": "'FiraCode Nerd Font', 'FiraCode Nerd Font Mono', 'Fira Code', monospace",    "terminal.integrated.fontFamily": "'FiraCode Nerd Font', monospace",
     "terminal.integrated.customGlyphs": true,
     "terminal.integrated.gpuAcceleration": "off",
     "editor.fontLigatures": false

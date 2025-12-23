@@ -1,84 +1,76 @@
 #!/bin/bash
 
-# --- SCRIPT DE RÉPARATION TOTALE (AVEC NVM) ---
+# --- SCRIPT D'INSTALLATION ULTIME (CORRIGÉ) ---
 BASE_DIR=$(dirname "$(readlink -f "$0")")
 export NVM_DIR="$HOME/.nvm"
 
-echo "🛑 1. NETTOYAGE TOTAL..."
-# On supprime tout ce qui pourrait créer des conflits
+echo "🛑 1. NETTOYAGE PRÉALABLE..."
 rm -rf "$HOME/.zshrc" "$HOME/.p10k.zsh" "$HOME/.oh-my-zsh" "$HOME/.nvm"
-# On nettoie les paquets node système qui font conflit
+# On garde tes fichiers de config Ranger/VSCode mais on nettoie les caches
 sudo apt-get remove --purge -y nodejs npm node-agent-base 2>/dev/null
 sudo apt-get autoremove -y
 
-echo "📦 2. INSTALLATION DES OUTILS SYSTÈME..."
+echo "📦 2. INSTALLATION DES PAQUETS SYSTÈME..."
 sudo apt update
-sudo apt install -y zsh git curl unzip fonts-firacode tree ranger eza fzf ripgrep btop build-essential
+sudo apt install -y zsh git curl unzip tree ranger eza fzf ripgrep btop build-essential
 
-echo "🔡 3. INSTALLATION FIRA CODE NERD FONT..."
+echo "🔡 3. INSTALLATION DES FONTS (CORRECTIF VISIBILITÉ)..."
 mkdir -p ~/.local/share/fonts
-curl -L -o ~/.local/share/fonts/FiraCodeNerdFont-Retina.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/FiraCode/Retina/FiraCodeNerdFont-Retina.ttf
+# On installe Regular ET Retina pour éviter les textes invisibles
+curl -fLo ~/.local/share/fonts/FiraCodeNerdFont-Regular.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/FiraCode/Regular/FiraCodeNerdFont-Regular.ttf
+curl -fLo ~/.local/share/fonts/FiraCodeNerdFont-Retina.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/FiraCode/Retina/FiraCodeNerdFont-Retina.ttf
 fc-cache -fv
 
-echo "⚡ 4. INSTALLATION DE NVM & NODE 20 (CRUCIAL POUR TON ZSHRC)..."
-# Installation de NVM
+echo "⚡ 4. NVM & NODE 20 (POUR GEMINI)..."
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-
-# Chargement immédiat de NVM pour l'utiliser dans ce script
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-# Installation de Node 20 (Demandé par ta fonction gemini)
-echo "Installing Node 20..."
 nvm install 20
 nvm use 20
 nvm alias default 20
-
-# Installation de Gemini CLI sur cette version de Node
-echo "Installing Gemini CLI..."
 npm install -g @google/generative-ai-cli
 
-echo "🐚 5. INSTALLATION OH MY ZSH & PLUGINS..."
+echo "🐚 5. OH MY ZSH & PLUGINS (AVEC COMPLETIONS)..."
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
-git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 
-echo "📝 6. COPIE DE TES FICHIERS (On ne modifie rien, on copie juste)..."
+# Installation des 3 plugins requis par ton zshrc
+ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
+git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
+# AJOUT CRUCIAL : Le plugin zsh-completions qui manquait
+git clone https://github.com/zsh-users/zsh-completions "$ZSH_CUSTOM/plugins/zsh-completions"
 
-# ZSHRC & P10K
+echo "📝 6. COPIE DE TES CONFIGS..."
 [ -f "$BASE_DIR/zshrc" ] && cp -fv "$BASE_DIR/zshrc" "$HOME/.zshrc"
 [ -f "$BASE_DIR/p10k.zsh" ] && cp -fv "$BASE_DIR/p10k.zsh" "$HOME/.p10k.zsh"
 
-# RANGER
 mkdir -p "$HOME/.config/ranger"
 [ -f "$BASE_DIR/rc.conf" ] && cp -fv "$BASE_DIR/rc.conf" "$HOME/.config/ranger/rc.conf"
 [ -f "$BASE_DIR/rifle.conf" ] && cp -fv "$BASE_DIR/rifle.conf" "$HOME/.config/ranger/rifle.conf"
 
-# VS CODE (Settings + Extensions)
+# VS Code : Copie + Sécurisation de la Font
 VSC_DIR="$HOME/.config/Code/User"
-[ -d "$HOME/.var/app/org.visualstudio.code/config/Code/User" ] && VSC_DIR="$HOME/.var/app/org.visualstudio.code/config/Code/User"
 mkdir -p "$VSC_DIR"
-[ -f "$BASE_DIR/settings.json" ] && cp -fv "$BASE_DIR/settings.json" "$VSC_DIR/settings.json"
+if [ -f "$BASE_DIR/settings.json" ]; then
+    cp -fv "$BASE_DIR/settings.json" "$VSC_DIR/settings.json"
+    # On ajoute ", monospace" pour que le texte soit toujours lisible même si la font charge mal
+    sed -i 's/"editor.fontFamily": ".*"/"editor.fontFamily": "\x27FiraCode Nerd Font\x27, monospace"/' "$VSC_DIR/settings.json"
+    sed -i 's/"terminal.integrated.fontFamily": ".*"/"terminal.integrated.fontFamily": "\x27FiraCode Nerd Font\x27, monospace"/' "$VSC_DIR/settings.json"
+fi
 
 if [ -f "$BASE_DIR/extensions_vscode.zip" ]; then
-    echo "📦 Extraction des extensions VS Code..."
     mkdir -p "$HOME/.vscode/extensions"
     unzip -o "$BASE_DIR/extensions_vscode.zip" -d "$HOME/.vscode/extensions"
 fi
 
-echo "💻 7. CONFIG TERMINAL GNOME..."
+echo "💻 7. FIX TERMINAL FONT..."
 PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
 if [ -n "$PROFILE" ]; then
     SCHEMA="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE/"
     gsettings set "$SCHEMA" use-custom-font true
-    gsettings set "$SCHEMA" font 'FiraCode Nerd Font Retina 12'
+    gsettings set "$SCHEMA" font 'FiraCode Nerd Font 12'
 fi
 
-echo "---"
-echo "✅ TERMINÉ."
-echo "👉 NVM et Node 20 sont installés : Ta fonction Gemini marchera."
-echo "👉 Nerd Font installée : Ton thème P10K marchera."
-echo "👉 VS Code restauré."
-
-# On lance Zsh
+echo "✅ TOUT EST LÀ. Redémarre ton terminal."
 exec zsh
