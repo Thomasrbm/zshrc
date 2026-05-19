@@ -1,8 +1,30 @@
 #!/bin/bash
+set -euo pipefail
 
 # --- SCRIPT FINAL (OFFICIAL GEMINI + DOCKER + 42 TOOLS) ---
 BASE_DIR=$(dirname "$(readlink -f "$0")")
 export NVM_DIR="$HOME/.nvm"
+
+# --- VÉRIFICATION SUDO (OBLIGATOIRE) ---
+if [ "$EUID" -eq 0 ]; then
+    echo "❌ ERREUR : Ne lance PAS ce script en root (sudo ./install_dependencies.sh)."
+    echo "   Lance-le en utilisateur normal : ./install_dependencies.sh"
+    echo "   Le script appellera sudo lui-même quand nécessaire."
+    exit 1
+fi
+
+if ! sudo -v; then
+    echo ""
+    echo "❌ ERREUR : Ce script nécessite les droits sudo (pour apt install)."
+    echo "   ➜  Relance-le et tape ton mot de passe quand demandé :"
+    echo "      ./install_dependencies.sh"
+    exit 1
+fi
+
+# Garde la session sudo active pendant toute la durée du script
+( while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done ) 2>/dev/null &
+SUDO_KEEPALIVE_PID=$!
+trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null || true' EXIT
 
 echo "📍 Installation propre et définitive..."
 
@@ -12,7 +34,18 @@ rm -f "$HOME/.zshrc" "$HOME/.p10k.zsh"
 
 echo "📦 2. INSTALLATION SYSTÈME..."
 sudo apt update
-sudo apt install -y zsh git curl unzip tree ranger fzf ripgrep btop build-essential libssl-dev python3-pip eza bat i3 ncdu tldr
+
+# Paquets indispensables — échec = on stoppe
+sudo apt install -y zsh git curl unzip tree ranger fzf ripgrep build-essential libssl-dev python3-pip
+
+# Paquets optionnels — on tente un par un, échec d'un = on continue
+for pkg in btop eza bat i3 ncdu tldr; do
+    if sudo apt install -y "$pkg" 2>/dev/null; then
+        echo "  ✓ $pkg"
+    else
+        echo "  ⚠ $pkg non disponible sur ce système, skip."
+    fi
+done
 
 # --- FIX LAZYGIT (Binaire) ---
 echo "🐙 INSTALLATION LAZYGIT..."
@@ -33,7 +66,7 @@ unzip -o -q FiraCode.zip -d ~/.local/share/fonts
 rm FiraCode.zip
 fc-cache -fv
 
-echo "⚡ 4. NODEJS & GEMINI OFFICIEL..."
+echo "⚡ 4. NODEJS..."
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -41,9 +74,12 @@ nvm install 20
 nvm use 20
 nvm alias default 20
 
-echo "🤖 Installation du CLI Gemini Officiel..."
-# C'est LE paquet officiel de Google. Il fournit la commande 'gemini'.
-npm install -g @google/gemini-cli
+if command -v claude >/dev/null; then
+    echo "🤖 Claude Code déjà installé ($(command -v claude)), skip."
+else
+    echo "🤖 Installation de Claude Code (officiel Anthropic)..."
+    curl -fsSL https://claude.ai/install.sh | bash
+fi
 
 echo "🐚 5. INSTALLATION OH MY ZSH..."
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
@@ -89,19 +125,22 @@ alias anti="python3 -c 'import antigravity'"
 alias extr="extract"
 alias r='ranger-cd'
 
-# --- Gemini Function ---
-gemini() {
+# --- Claude Code Function ---
+claude() {
      # Charge NVM si besoin
      export NVM_DIR="$HOME/.nvm"
      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
      nvm use 20 >/dev/null 2>&1
-     
-     if command -v gemini >/dev/null; then
-        command gemini "$@"
+
+     # Ajoute le chemin d'install par défaut de Claude Code au PATH si besoin
+     export PATH="$HOME/.local/bin:$PATH"
+
+     if command -v claude >/dev/null; then
+        command claude "$@"
      else
-        echo "⚠️ Commande 'gemini' introuvable. Installation..."
-        npm install -g @google/gemini-cli
-        command gemini "$@"
+        echo "⚠️ Commande 'claude' introuvable. Installation..."
+        curl -fsSL https://claude.ai/install.sh | bash
+        command claude "$@"
      fi
 }
 
@@ -151,11 +190,11 @@ zle -N ranger-cd
 bindkey '^[r' ranger-cd
 EOF
 
-# Copie des configs locales si présentes
-[ -f "$BASE_DIR/p10k.zsh" ] && cp -v "$BASE_DIR/p10k.zsh" "$HOME/.p10k.zsh"
+# Copie des configs locales si présentes (set -e safe)
+[ -f "$BASE_DIR/p10k.zsh" ]   && cp -v "$BASE_DIR/p10k.zsh"   "$HOME/.p10k.zsh"          || true
 mkdir -p "$HOME/.config/ranger"
-[ -f "$BASE_DIR/rc.conf" ] && cp -v "$BASE_DIR/rc.conf" "$HOME/.config/ranger/rc.conf"
-[ -f "$BASE_DIR/rifle.conf" ] && cp -v "$BASE_DIR/rifle.conf" "$HOME/.config/ranger/rifle.conf"
+[ -f "$BASE_DIR/rc.conf" ]    && cp -v "$BASE_DIR/rc.conf"    "$HOME/.config/ranger/rc.conf"    || true
+[ -f "$BASE_DIR/rifle.conf" ] && cp -v "$BASE_DIR/rifle.conf" "$HOME/.config/ranger/rifle.conf" || true
 
 echo "⚙️ 7. CONFIGURATION VS CODE..."
 VSC_DIR="$HOME/.config/Code/User"
@@ -169,19 +208,29 @@ echo '{
     "terminal.integrated.customGlyphs": true,
     "editor.fontLigatures": true,
     "editor.fontSize": 14,
+    "terminal.integrated.defaultProfile.linux": "zsh",
+    "terminal.integrated.profiles.linux": {
+        "zsh": {
+            "path": "/usr/bin/zsh",
+            "args": ["-l"]
+        }
+    },
     "[cpp]": { "editor.defaultFormatter": "keyhr.42-c-format" }
 }' > "$VSC_DIR/settings.json"
 
 if command -v code >/dev/null; then
     echo "🧩 Extensions (Docker, 42, etc)..."
-    code --install-extension "mhutchie.git-graph" --force
-    code --install-extension "GitHub.github-vscode-theme" --force
-    code --install-extension "pkief.material-icon-theme" --force
-    code --install-extension "usernamehw.errorlens" --force
-    code --install-extension "keyhr.42-c-format" --force
-    code --install-extension wblech.42-ft-count-line --force
-    code --install-extension "ms-azuretools.vscode-docker" --force
-    code --install-extension "ms-vscode-remote.remote-containers" --force
+    for ext in \
+        "mhutchie.git-graph" \
+        "GitHub.github-vscode-theme" \
+        "pkief.material-icon-theme" \
+        "usernamehw.errorlens" \
+        "keyhr.42-c-format" \
+        "wblech.42-ft-count-line" \
+        "ms-azuretools.vscode-docker" \
+        "ms-vscode-remote.remote-containers"; do
+        code --install-extension "$ext" --force || echo "  ⚠ extension $ext échouée, skip."
+    done
 fi
 
 echo "✅ FINI. Redémarre ton terminal."
