@@ -5,26 +5,30 @@ set -euo pipefail
 BASE_DIR=$(dirname "$(readlink -f "$0")")
 export NVM_DIR="$HOME/.nvm"
 
-# --- VÉRIFICATION SUDO (OBLIGATOIRE) ---
+# --- GESTION DES DROITS ROOT / SUDO ---
+# Le script fonctionne aussi bien en root qu'en utilisateur normal.
+# - En root     : SUDO reste vide (on est déjà privilégié).
+# - Utilisateur : SUDO="sudo" et on garde la session sudo active.
 if [ "$EUID" -eq 0 ]; then
-    echo "❌ ERREUR : Ne lance PAS ce script en root (sudo ./install_dependencies.sh)."
-    echo "   Lance-le en utilisateur normal : ./install_dependencies.sh"
-    echo "   Le script appellera sudo lui-même quand nécessaire."
+    SUDO=""
+    echo "🔑 Exécution en root : les commandes système tourneront sans sudo."
+elif command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+    if ! sudo -v; then
+        echo ""
+        echo "❌ ERREUR : Ce script nécessite les droits sudo (pour apt install)."
+        echo "   ➜  Relance-le et tape ton mot de passe quand demandé :"
+        echo "      ./install_dependencies.sh"
+        exit 1
+    fi
+    # Garde la session sudo active pendant toute la durée du script
+    ( while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done ) 2>/dev/null &
+    SUDO_KEEPALIVE_PID=$!
+    trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null || true' EXIT
+else
+    echo "❌ ERREUR : ni root ni sudo disponible. Impossible d'installer les paquets."
     exit 1
 fi
-
-if ! sudo -v; then
-    echo ""
-    echo "❌ ERREUR : Ce script nécessite les droits sudo (pour apt install)."
-    echo "   ➜  Relance-le et tape ton mot de passe quand demandé :"
-    echo "      ./install_dependencies.sh"
-    exit 1
-fi
-
-# Garde la session sudo active pendant toute la durée du script
-( while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done ) 2>/dev/null &
-SUDO_KEEPALIVE_PID=$!
-trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null || true' EXIT
 
 echo "📍 Installation propre et définitive..."
 
@@ -33,14 +37,14 @@ rm -rf "$HOME/.oh-my-zsh" "$HOME/.config/Code" "$HOME/.vscode"
 rm -f "$HOME/.zshrc" "$HOME/.p10k.zsh"
 
 echo "📦 2. INSTALLATION SYSTÈME..."
-sudo apt update
+$SUDO apt update
 
 # Paquets indispensables — échec = on stoppe
-sudo apt install -y zsh git curl unzip tree ranger fzf ripgrep build-essential libssl-dev python3-pip
+$SUDO apt install -y zsh git curl unzip tree ranger fzf ripgrep build-essential libssl-dev python3-pip
 
 # Paquets optionnels — on tente un par un, échec d'un = on continue
 for pkg in btop eza bat i3 ncdu tldr; do
-    if sudo apt install -y "$pkg" 2>/dev/null; then
+    if $SUDO apt install -y "$pkg" 2>/dev/null; then
         echo "  ✓ $pkg"
     else
         echo "  ⚠ $pkg non disponible sur ce système, skip."
@@ -54,7 +58,7 @@ LAZYGIT_VERSION="0.44.1"
 curl -L -o lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
 if file lazygit.tar.gz | grep -q "gzip compressed data"; then
     tar xf lazygit.tar.gz lazygit
-    sudo install lazygit /usr/local/bin
+    $SUDO install lazygit /usr/local/bin
     rm lazygit.tar.gz lazygit
 else
     echo "❌ Erreur Lazygit. On continue."
