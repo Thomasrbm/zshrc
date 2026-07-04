@@ -111,6 +111,7 @@ source $ZSH/oh-my-zsh.sh
 # --- Aliases ---
 alias ..="cd .."
 alias ...="cd ../.."
+alias cls="clear"
 if command -v eza >/dev/null; then
     alias ls='eza --git --icons --color=always'
     alias ll='eza -al --header --git --icons --color=always'
