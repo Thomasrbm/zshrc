@@ -34,6 +34,9 @@ alias anti="python3 -c 'import antigravity'"
 alias extr="extract"
 alias r='ranger-cd'
 
+# SSH Aliases
+alias oneleague="ssh root@163.172.141.178"
+alias hostinger="ssh root@46.202.171.191"
 
 alias cat=batcat
 
